@@ -7,11 +7,9 @@ import {
   UtensilsCrossed,
   Lock,
   User,
-  Shield,
   Eye,
   EyeOff,
   AlertCircle,
-  Sparkles,
 } from 'lucide-react';
 
 export const Login = () => {
@@ -57,61 +55,44 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-charcoal-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-96 bg-brand-500/10 blur-[120px] rounded-full pointer-events-none" />
-
-      {/* Brand Header */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center relative z-10">
-        <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-brand-400 p-0.5 shadow-lg shadow-brand-500/20 flex items-center justify-center mb-4">
-          <div className="w-full h-full bg-charcoal-900 rounded-[14px] flex items-center justify-center">
-            <UtensilsCrossed className="w-7 h-7 text-brand-400" />
-          </div>
+    <div className="min-h-screen bg-charcoal-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {/* Brand */}
+      <div className="sm:mx-auto sm:w-full sm:max-w-sm text-center">
+        <div className="mx-auto w-12 h-12 rounded-xl bg-brand-600 flex items-center justify-center mb-4">
+          <UtensilsCrossed className="w-6 h-6 text-white" />
         </div>
-        <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-          Urban Plate Restaurant
-        </h2>
-        <p className="mt-1.5 text-xs text-slate-400 font-medium">
-          GURU AI Commercial POS & Restaurant Billing System
-        </p>
+        <h2 className="text-xl font-bold text-white">Urban Plate Restaurant</h2>
+        <p className="mt-1 text-xs text-slate-400">Restaurant Billing System</p>
       </div>
 
       {/* Login Card */}
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0 relative z-10">
-        <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 p-8">
-          <div className="mb-6">
-            <h3 className="text-lg font-bold text-slate-900">Sign in to Terminal</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Enter your authorized staff credentials to continue
-            </p>
-          </div>
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-sm px-4 sm:px-0">
+        <div className="bg-white rounded-xl shadow-lg border border-slate-100 p-6">
+          <h3 className="text-base font-semibold text-slate-900 mb-5">Sign in</h3>
 
-          {/* Quick Demo Fill Buttons */}
-          <div className="mb-6 p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-brand-600" />
-              Quick Fill Demo Accounts:
-            </p>
+          {/* Demo Accounts */}
+          <div className="mb-5 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+            <p className="text-[11px] font-medium text-slate-500 mb-2">Demo Accounts</p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => handleFillDemo('admin')}
-                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-600 transition-colors shadow-2xs"
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-white border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-600 transition-colors"
               >
-                Admin (Full Access)
+                Admin
               </button>
               <button
                 type="button"
                 onClick={() => handleFillDemo('cashier')}
-                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-600 transition-colors shadow-2xs"
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-white border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-600 transition-colors"
               >
-                Cashier (POS Staff)
+                Cashier
               </button>
             </div>
           </div>
 
           {error && (
-            <div className="mb-5 p-3 rounded-lg bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-700 text-xs font-medium">
+            <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 flex items-start gap-2 text-rose-700 text-xs font-medium">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -123,7 +104,7 @@ export const Login = () => {
               id="identifier"
               type="text"
               autoComplete="username"
-              placeholder="e.g. admin or cashier@urbanplate.com"
+              placeholder="e.g. admin"
               icon={User}
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
@@ -137,7 +118,7 @@ export const Login = () => {
               >
                 Password
               </label>
-              <div className="relative rounded-lg shadow-sm">
+              <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                   <Lock className="h-5 w-5" />
                 </div>
@@ -154,7 +135,7 @@ export const Login = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -168,14 +149,9 @@ export const Login = () => {
               className="w-full mt-2 font-semibold"
               loading={loading}
             >
-              Sign In to POS
+              Sign In
             </Button>
           </form>
-
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Security: JWT + HttpOnly Cookie</span>
-            <span>Version 1.0.0</span>
-          </div>
         </div>
       </div>
     </div>

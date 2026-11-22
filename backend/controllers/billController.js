@@ -1,37 +1,47 @@
-const Bill = require('../models/Bill');
+const { getNextSequence } = require('../utils/counter');
 const Order = require('../models/Order');
 const Table = require('../models/Table');
 const Payment = require('../models/Payment');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 // Helper to compute tax and totals
+/* Compute financial values using integer paise to avoid floating‑point errors */
 const computeBillFinancials = (subtotal, discountType = 'fixed', discountValue = 0) => {
-  const dVal = Math.max(0, Number(discountValue) || 0);
-  let discountAmount = 0;
+  // Convert rupee values to paise (integer) for safe arithmetic
+  const toPaise = (num) => Math.round(parseFloat(num) * 100);
+  const fromPaise = (int) => (int / 100).toFixed(2);
+
+  const subPaise = toPaise(subtotal);
+  const dVal = parseFloat(discountValue) || 0;
+
+  let discountPaise = 0;
 
   if (discountType === 'percentage') {
-    discountAmount = parseFloat(((subtotal * Math.min(100, dVal)) / 100).toFixed(2));
+    // percentage discount on subtotal
+    discountPaise = Math.round((subPaise * Math.min(100, dVal)) / 100);
   } else {
-    discountAmount = parseFloat(Math.min(subtotal, dVal).toFixed(2));
+    // fixed discount in rupees -> convert to paise and cap at subtotal
+    const fixedPaise = toPaise(dVal);
+    discountPaise = Math.min(subPaise, fixedPaise);
   }
 
-  const taxableAmount = parseFloat(Math.max(0, subtotal - discountAmount).toFixed(2));
-  const cgst = parseFloat(((taxableAmount * 2.5) / 100).toFixed(2)); // 2.5% CGST
-  const sgst = parseFloat(((taxableAmount * 2.5) / 100).toFixed(2)); // 2.5% SGST
-  const grandTotal = parseFloat((taxableAmount + cgst + sgst).toFixed(2));
-  const finalAmount = Math.round(grandTotal);
-  const roundOff = parseFloat((finalAmount - grandTotal).toFixed(2));
+  const taxablePaise = Math.max(0, subPaise - discountPaise);
+  const cgstPaise = Math.round((taxablePaise * 2.5) / 100);
+  const sgstPaise = Math.round((taxablePaise * 2.5) / 100);
+  const grandTotalPaise = taxablePaise + cgstPaise + sgstPaise;
+  const finalAmount = Math.round(grandTotalPaise / 100); // round to nearest rupee
+  const roundOffPaise = (finalAmount * 100) - grandTotalPaise; // may be negative
 
   return {
-    subtotal,
+    subtotal: parseFloat(fromPaise(subPaise)),
     discountType,
     discountValue: dVal,
-    discountAmount,
-    taxableAmount,
-    cgst,
-    sgst,
-    grandTotal,
-    roundOff,
+    discountAmount: parseFloat(fromPaise(discountPaise)),
+    taxableAmount: parseFloat(fromPaise(taxablePaise)),
+    cgst: parseFloat(fromPaise(cgstPaise)),
+    sgst: parseFloat(fromPaise(sgstPaise)),
+    grandTotal: parseFloat(fromPaise(grandTotalPaise)),
+    roundOff: parseFloat((roundOffPaise / 100).toFixed(2)),
     finalAmount,
   };
 };
@@ -39,10 +49,37 @@ const computeBillFinancials = (subtotal, discountType = 'fixed', discountValue =
 // GET /api/bills
 const getBills = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, status, paymentStatus, search } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      paymentStatus,
+      orderType,
+      search,
+      startDate,
+      endDate,
+    } = req.query;
+
     const query = {};
     if (status && status !== 'All') query.status = status;
     if (paymentStatus && paymentStatus !== 'All') query.paymentStatus = paymentStatus;
+    if (orderType && orderType !== 'All') query.orderType = orderType;
+
+    // Date range filtering
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        query.createdAt.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
+
     if (search) {
       query.$or = [
         { billNumber: { $regex: search, $options: 'i' } },
@@ -54,6 +91,7 @@ const getBills = async (req, res, next) => {
     const total = await Bill.countDocuments(query);
     const bills = await Bill.find(query)
       .populate('cashier', 'name username')
+      .populate('cancelledBy', 'name username')
       .populate('order')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -74,6 +112,7 @@ const getBillById = async (req, res, next) => {
   try {
     const bill = await Bill.findById(req.params.id)
       .populate('cashier', 'name username')
+      .populate('cancelledBy', 'name username')
       .populate('order');
 
     if (!bill) {
@@ -135,10 +174,11 @@ const createBill = async (req, res, next) => {
 
     const financials = computeBillFinancials(order.subtotal, discountType, discountValue);
 
-    // Format: BILL-YYYYMMDD-XXXX
     const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const billNumber = `BILL-${todayStr}-${randomSuffix}`;
+    // Generate sequential bill number using atomic counter
+const seq = await getNextSequence('bill');
+const billNumber = `BILL-${todayStr}-${seq.toString().padStart(4, '0')}`;
 
     const bill = await Bill.create({
       billNumber,
@@ -183,14 +223,12 @@ const recordPayment = async (req, res, next) => {
     if (!bill) {
       return errorResponse(res, 404, 'Bill not found');
     }
-
     if (bill.status === 'cancelled') {
       return errorResponse(res, 400, 'Cannot accept payment for a cancelled bill');
     }
 
     const { paymentMode, amount, payments: splitPayments, tenderedAmount } = req.body;
 
-    // Normalizing payments list
     let paymentList = [];
     if (Array.isArray(splitPayments) && splitPayments.length > 0) {
       paymentList = splitPayments;
@@ -200,7 +238,7 @@ const recordPayment = async (req, res, next) => {
       return errorResponse(res, 400, 'Please provide payment mode and amount or split payments array');
     }
 
-    // Validate each payment
+    // Validate each payment entry
     for (const p of paymentList) {
       if (!['cash', 'upi', 'card'].includes(p.paymentMode)) {
         return errorResponse(res, 400, `Invalid payment mode: ${p.paymentMode}. Allowed: cash, upi, card`);
@@ -210,7 +248,16 @@ const recordPayment = async (req, res, next) => {
       }
     }
 
-    // Create payment records
+    // Compute prospective total after adding new payments
+    const existingPayments = await Payment.find({ bill: bill._id });
+    const existingTotal = existingPayments.reduce((sum, p) => sum + p.amount, 0);
+    const newPaymentsSum = paymentList.reduce((sum, p) => sum + Number(p.amount), 0);
+    const prospectiveTotal = existingTotal + newPaymentsSum;
+
+    if (prospectiveTotal > bill.finalAmount) {
+      return errorResponse(res, 400, `Overpayment detected. Bill total is ${bill.finalAmount}, attempted to pay ${prospectiveTotal}.`);
+    }
+
     const createdPayments = [];
     for (const p of paymentList) {
       const paymentDoc = await Payment.create({
@@ -222,7 +269,6 @@ const recordPayment = async (req, res, next) => {
       createdPayments.push(paymentDoc);
     }
 
-    // Calculate total payments made for this bill
     const allBillPayments = await Payment.find({ bill: bill._id });
     const totalPaid = allBillPayments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -236,9 +282,9 @@ const recordPayment = async (req, res, next) => {
 
     await bill.save();
 
-    // Tendered calculation for Cash change
     let changeDue = 0;
     if (tenderedAmount && Number(tenderedAmount) > totalPaid) {
+      // Change is based on finalAmount, not totalPaid, to avoid returning excess
       changeDue = parseFloat((Number(tenderedAmount) - bill.finalAmount).toFixed(2));
     }
 
@@ -254,10 +300,42 @@ const recordPayment = async (req, res, next) => {
   }
 };
 
+// PUT /api/bills/:id/cancel (Cancel / Void Bill)
+const cancelBill = async (req, res, next) => {
+  try {
+    const { cancellationReason = 'Customer void request' } = req.body;
+
+    const bill = await Bill.findById(req.params.id);
+    if (!bill) {
+      return errorResponse(res, 404, 'Bill not found');
+    }
+
+    if (bill.status === 'cancelled') {
+      return errorResponse(res, 400, 'Bill is already cancelled');
+    }
+
+    bill.status = 'cancelled';
+    bill.cancellationReason = cancellationReason.trim();
+    bill.cancelledBy = req.user._id;
+    bill.cancelledAt = new Date();
+
+    await bill.save();
+
+    const populatedBill = await Bill.findById(bill._id)
+      .populate('cashier', 'name username')
+      .populate('cancelledBy', 'name username');
+
+    return successResponse(res, 200, 'Bill cancelled successfully', populatedBill);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getBills,
   getBillById,
   previewBill,
   createBill,
   recordPayment,
+  cancelBill,
 };

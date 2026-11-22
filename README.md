@@ -1,6 +1,6 @@
-# GURU AI Restaurant Billing Software (Urban Plate POS)
+# Urban Plate Restaurant Billing Software (POS System)
 
-A modern, commercial-grade Restaurant Billing and Point of Sale (POS) application built for **Urban Plate Restaurant** as part of the technical hiring assignment for **GURU AI Technologies**.
+A modern, commercial-grade Restaurant Billing and Point of Sale (POS) application built for **Urban Plate Restaurant**.
 
 ---
 
@@ -150,7 +150,7 @@ The backend connects using the `MONGO_URI` variable specified in `backend/.env`:
 ```env
 PORT=5000
 MONGO_URI=mongodb://127.0.0.1:27017/restaurant_billing
-JWT_SECRET=super_secret_jwt_key_restaurant_billing_2026_guru_ai
+JWT_SECRET=super_secret_jwt_key_restaurant_billing_2026_urban_plate
 JWT_EXPIRE=7d
 NODE_ENV=development
 CLIENT_URL=http://localhost:5173
@@ -347,5 +347,11 @@ POST /api/auth/logout 200 0.548 ms - 58
   - Cash tendered and change-due automated calculations.
   - Professional restaurant tax invoice receipt layout with `@media print` thermal printing support.
   - Historical price freezing & immutability verified through automated test suites.
-- [ ] **Phase 4: Bill History Archive, Order Cancellations & Analytics** *(Next)*
-- [ ] **Phase 5: Production Deployment & Polish**
+- [x] **Phase 4: Bill History Archive, Order Cancellations & Analytics** *(Completed)*
+  - Comprehensive Bill Archive with multi-criteria filtering (date presets, payment status, dine-in/takeaway, active/cancelled).
+  - Invoice Void / Cancellation workflow with required reason logging and audit trail (`cancelledBy`, `cancelledAt`).
+  - Separation of realized sales from cancelled transactions in revenue calculations.
+  - Detailed Analytics Dashboard (`/reports`): 6 KPI cards (Net Revenue, Orders Count, AOV, Discounts, GST 5%, Lost Revenue).
+  - Recharts visual telemetry: Revenue pace area curves, payment channels breakdown, and top-selling dishes ranking.
+  - One-click sales audit CSV export (`/api/reports/export-csv`) with role-based protection.
+- [ ] **Phase 5: Production Deployment & Polish** *(Next)*

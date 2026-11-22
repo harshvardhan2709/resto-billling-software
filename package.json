@@ -7,5 +7,11 @@
     "frontend": "npm --prefix frontend run dev",
     "seed": "npm --prefix backend run seed",
     "test:backend": "npm --prefix backend run test"
+  },
+  "dependencies": {
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^8.7.5",
+    "helmet": "^8.3.0",
+    "ip-address": "^10.7.6"
   }
 }

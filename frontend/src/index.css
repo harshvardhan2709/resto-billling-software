@@ -27,16 +27,16 @@
   background: #94a3b8;
 }
 
-/* Receipt Print Styling */
+/* Receipt & Document Print Styling */
 @media print {
-  body * {
+  body:has(#printable-receipt) * {
     visibility: hidden;
   }
-  #printable-receipt,
-  #printable-receipt * {
+  body:has(#printable-receipt) #printable-receipt,
+  body:has(#printable-receipt) #printable-receipt * {
     visibility: visible;
   }
-  #printable-receipt {
+  body:has(#printable-receipt) #printable-receipt {
     position: absolute;
     left: 0;
     top: 0;
@@ -45,5 +45,16 @@
     padding: 8px;
     border: none !important;
     box-shadow: none !important;
+  }
+
+  body:not(:has(#printable-receipt)) aside,
+  body:not(:has(#printable-receipt)) header,
+  body:not(:has(#printable-receipt)) button,
+  body:not(:has(#printable-receipt)) .no-print {
+    display: none !important;
+  }
+  body:not(:has(#printable-receipt)) main {
+    padding: 0 !important;
+    max-width: 100% !important;
   }
 }

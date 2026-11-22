@@ -35,7 +35,7 @@ export const Input = ({
           } pr-3.5 py-2.5 ${
             error
               ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-200 text-rose-900 placeholder-rose-300'
-              : 'border-slate-200 hover:border-slate-300 focus:border-brand-500 focus:ring-brand-500/20 text-slate-900 bg-white placeholder-slate-400'
+              : 'border-slate-200 hover:border-slate-300 focus:border-primary focus:ring-primary/20 text-slate-900 bg-white placeholder-slate-400'
           } ${className}`}
           {...props}
         />

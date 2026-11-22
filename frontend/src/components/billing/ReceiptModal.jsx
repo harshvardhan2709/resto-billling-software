@@ -10,6 +10,21 @@ export const ReceiptModal = ({ isOpen, onClose, bill, paymentInfo }) => {
     window.print();
   };
 
+  const handleDownload = () => {
+    const receiptElement = document.getElementById('printable-receipt');
+    if (!receiptElement) return;
+    const textContent = receiptElement.innerText;
+    const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Receipt_${bill.billNumber || 'receipt'}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const formattedDate = new Date(bill.createdAt || Date.now()).toLocaleDateString(
     'en-IN',
     {
@@ -200,18 +215,25 @@ export const ReceiptModal = ({ isOpen, onClose, bill, paymentInfo }) => {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-2.5 pt-2">
+        <div className="flex items-center justify-end gap-2 pt-2">
           <Button variant="outline" size="sm" onClick={onClose}>
             Close
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={Download}
+            onClick={handleDownload}
+          >
+            Download
           </Button>
           <Button
             variant="primary"
             size="sm"
             icon={Printer}
             onClick={handlePrint}
-            className="font-bold"
           >
-            Print Receipt
+            Print
           </Button>
         </div>
       </div>

@@ -1,13 +1,19 @@
 const jwt = require('jsonwebtoken');
 
+// Ensure required environment variables are present at startup
+if (!process.env.JWT_SECRET) {
+  console.error('❌ Fatal: JWT_SECRET environment variable is not set.');
+  process.exit(1);
+}
+
 const signToken = (payload) => {
-  return jwt.sign(payload, process.env.JWT_SECRET || 'default_jwt_secret', {
+  return jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d',
   });
 };
 
 const verifyToken = (token) => {
-  return jwt.verify(token, process.env.JWT_SECRET || 'default_jwt_secret');
+  return jwt.verify(token, process.env.JWT_SECRET);
 };
 
 /**
@@ -47,8 +53,6 @@ const sendTokenResponse = (user, statusCode, res, message = 'Authentication succ
   });
 };
 
-module.exports = {
-  signToken,
-  verifyToken,
-  sendTokenResponse,
-};
+module.exports = { signToken, verifyToken, sendTokenResponse };
+
+

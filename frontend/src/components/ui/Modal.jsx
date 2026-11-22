@@ -38,11 +38,11 @@ export const Modal = ({
       {/* Modal Dialog */}
       <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
         <div
-          className={`relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 w-full ${maxWidth} border border-slate-100`}
+          className={`relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 w-full ${maxWidth} border border-slate-100 max-h-[92vh] flex flex-col`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
             <div>
               {title && <h3 className="text-base font-bold text-slate-900">{title}</h3>}
               {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
@@ -57,7 +57,7 @@ export const Modal = ({
           </div>
 
           {/* Content */}
-          <div className="p-6">{children}</div>
+          <div className="p-6 overflow-y-auto flex-1">{children}</div>
         </div>
       </div>
     </div>

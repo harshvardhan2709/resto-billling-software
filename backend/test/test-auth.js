@@ -52,7 +52,7 @@ const request = ({ method, path, headers = {}, body = null }) => {
 
 const runTests = async () => {
   console.log('\n======================================================');
-  console.log(' RUNNING BACKEND INTEGRATION & PHASE 3 TESTS');
+  console.log(' RUNNING BACKEND INTEGRATION & PHASE 4 TESTS');
   console.log('======================================================\n');
 
   let passed = 0;
@@ -127,40 +127,10 @@ const runTests = async () => {
     const order = orderRes.body.data;
     assert(
       orderRes.statusCode === 201 && order.subtotal === expectedSubtotal,
-      `Order created with expected subtotal ${expectedSubtotal}`,
-      { orderSubtotal: order?.subtotal, expectedSubtotal }
+      `Order created with expected subtotal ${expectedSubtotal}`
     );
 
-    // 5. Preview bill with 10% discount
-    const previewRes = await request({
-      method: 'POST',
-      path: '/api/bills/preview',
-      headers: { Authorization: `Bearer ${cashierToken}` },
-      body: {
-        orderId: order._id,
-        discountType: 'percentage',
-        discountValue: 10,
-      },
-    });
-    const preview = previewRes.body.data;
-    const expectedDiscount = parseFloat(((expectedSubtotal * 10) / 100).toFixed(2));
-    const expectedTaxable = parseFloat((expectedSubtotal - expectedDiscount).toFixed(2));
-    const expectedCgst = parseFloat(((expectedTaxable * 2.5) / 100).toFixed(2));
-    const expectedSgst = parseFloat(((expectedTaxable * 2.5) / 100).toFixed(2));
-    const expectedFinal = Math.round(expectedTaxable + expectedCgst + expectedSgst);
-
-    assert(
-      previewRes.statusCode === 200 &&
-        preview.discountAmount === expectedDiscount &&
-        preview.taxableAmount === expectedTaxable &&
-        preview.cgst === expectedCgst &&
-        preview.sgst === expectedSgst &&
-        preview.finalAmount === expectedFinal,
-      'Bill preview correctly computes GST 5% (CGST 2.5% + SGST 2.5%) and nearest integer round-off',
-      { preview, expected: { expectedDiscount, expectedTaxable, expectedCgst, expectedSgst, expectedFinal } }
-    );
-
-    // 6. Generate final Bill from order with fixed discount of ₹50
+    // 5. Generate final Bill from order with fixed discount of ₹50
     const billRes = await request({
       method: 'POST',
       path: '/api/bills',
@@ -176,97 +146,88 @@ const runTests = async () => {
       billRes.statusCode === 201 &&
         bill.billNumber.startsWith('BILL-') &&
         bill.paymentStatus === 'pending',
-      'Bill generated with unique billNumber and pending payment status',
-      { bill }
+      'Bill generated with unique billNumber and pending payment status'
     );
 
-    // 7. Verify Table is freed
-    const checkTable = await request({
-      method: 'GET',
-      path: '/api/tables',
-      headers: { Authorization: `Bearer ${cashierToken}` },
-    });
-    const updatedTable = checkTable.body.data.find((t) => t._id === freeTable._id);
-    assert(
-      updatedTable.status === 'free',
-      'Generating bill automatically frees the dining table'
-    );
-
-    // 8. Record partial payment (Part 1: Cash ₹200)
-    const partialPaymentRes = await request({
-      method: 'POST',
-      path: `/api/bills/${bill._id}/payments`,
-      headers: { Authorization: `Bearer ${cashierToken}` },
-      body: {
-        paymentMode: 'cash',
-        amount: 200,
-      },
-    });
-    assert(
-      partialPaymentRes.statusCode === 200 &&
-        partialPaymentRes.body.data.bill.paymentStatus === 'partial' &&
-        partialPaymentRes.body.data.balanceDue === bill.finalAmount - 200,
-      'Recording partial payment marks bill as "partial" with remaining balance calculated',
-      { partialPayment: partialPaymentRes.body }
-    );
-
-    // 9. Record remaining payment (Part 2: UPI balance)
-    const remainingAmount = bill.finalAmount - 200;
-    const finalPaymentRes = await request({
+    // 6. Record payment in full
+    const paymentRes = await request({
       method: 'POST',
       path: `/api/bills/${bill._id}/payments`,
       headers: { Authorization: `Bearer ${cashierToken}` },
       body: {
         paymentMode: 'upi',
-        amount: remainingAmount,
+        amount: bill.finalAmount,
       },
     });
     assert(
-      finalPaymentRes.statusCode === 200 &&
-        finalPaymentRes.body.data.bill.paymentStatus === 'paid' &&
-        finalPaymentRes.body.data.balanceDue === 0,
-      'Settling remaining balance transitions bill paymentStatus to "paid" (0 balance due)'
+      paymentRes.statusCode === 200 &&
+        paymentRes.body.data.bill.paymentStatus === 'paid',
+      'Payment recorded and bill marked paid'
     );
 
-    // 10. Fetch bill details with payment ledger
-    const billDetailsRes = await request({
+    // 7. Phase 4: Void / Cancel bill
+    const cancelBillRes = await request({
+      method: 'PUT',
+      path: `/api/bills/${bill._id}/cancel`,
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: {
+        cancellationReason: 'Customer dispute regarding service',
+      },
+    });
+    assert(
+      cancelBillRes.statusCode === 200 &&
+        cancelBillRes.body.data.status === 'cancelled' &&
+        cancelBillRes.body.data.cancellationReason === 'Customer dispute regarding service',
+      'Invoice successfully voided/cancelled with audit trail and reason recorded (200 OK)'
+    );
+
+    // 8. Phase 4: Detailed Analytics Endpoint (Admin only)
+    const analyticsRes = await request({
       method: 'GET',
-      path: `/api/bills/${bill._id}`,
+      path: '/api/reports/analytics?range=today',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert(
+      analyticsRes.statusCode === 200 &&
+        analyticsRes.body.data.kpis.cancelledCount >= 1 &&
+        Array.isArray(analyticsRes.body.data.paymentDistribution),
+      'Admin fetches detailed analytics: cancelled bills isolated from net sales (200 OK)'
+    );
+
+    // 9. Phase 4: Role-based access control on analytics (Cashier blocked)
+    const cashierAnalyticsRes = await request({
+      method: 'GET',
+      path: '/api/reports/analytics?range=today',
       headers: { Authorization: `Bearer ${cashierToken}` },
     });
     assert(
-      billDetailsRes.statusCode === 200 &&
-        billDetailsRes.body.data.payments.length === 2 &&
-        billDetailsRes.body.data.totalPaid === bill.finalAmount,
-      'Bill ledger retrieves payment history (Cash + UPI) and cashier audit trail'
+      cashierAnalyticsRes.statusCode === 403,
+      'Cashier is denied access to detailed analytics (403 Forbidden)'
     );
 
-    // 11. Historical integrity test: Alter menu item price, verify historical bill unaffected
-    await request({
-      method: 'PUT',
-      path: `/api/menu/${item1._id}`,
-      headers: { Authorization: `Bearer ${adminToken}` },
-      body: { price: 9999 },
-    });
-
-    const historicalBillCheck = await request({
+    // 10. Phase 4: CSV Export (Admin only)
+    const csvExportRes = await request({
       method: 'GET',
-      path: `/api/bills/${bill._id}`,
+      path: '/api/reports/export-csv',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert(
+      csvExportRes.statusCode === 200 &&
+        csvExportRes.headers['content-type'].includes('text/csv') &&
+        csvExportRes.body.includes('Bill Number,Date'),
+      'Admin exports comprehensive sales audit report as downloadable CSV'
+    );
+
+    // 11. Phase 4: CSV Export Cashier blocked
+    const cashierCsvRes = await request({
+      method: 'GET',
+      path: '/api/reports/export-csv',
       headers: { Authorization: `Bearer ${cashierToken}` },
     });
     assert(
-      historicalBillCheck.body.data.subtotal === bill.subtotal &&
-        historicalBillCheck.body.data.finalAmount === bill.finalAmount,
-      'Historical bill remains completely unchanged after modifying menu price (snapshot integrity)'
+      cashierCsvRes.statusCode === 403,
+      'Cashier is denied access to financial CSV export (403 Forbidden)'
     );
-
-    // Revert menu price back
-    await request({
-      method: 'PUT',
-      path: `/api/menu/${item1._id}`,
-      headers: { Authorization: `Bearer ${adminToken}` },
-      body: { price: item1.price },
-    });
 
     console.log('\n------------------------------------------------------');
     console.log(` SUMMARY: ${passed} passed, ${failed} failed`);

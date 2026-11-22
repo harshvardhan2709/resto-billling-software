@@ -1,6 +1,36 @@
 require('dotenv').config();
+
+// Environment validation
+const requiredEnv = ['JWT_SECRET', 'MONGO_URI'];
+requiredEnv.forEach((key) => {
+  if (!process.env[key]) {
+    console.error(`❌ Fatal: Required environment variable ${key} is missing.`);
+    process.exit(1);
+  }
+});
+
+// Validate PORT if provided
+if (process.env.PORT && isNaN(parseInt(process.env.PORT, 10))) {
+  console.error('❌ Fatal: PORT must be a numeric value.');
+  process.exit(1);
+}
+
+// Validate CLIENT_URL – must be a valid URL if set
+if (process.env.CLIENT_URL) {
+  try {
+    new URL(process.env.CLIENT_URL);
+  } catch {
+    console.error('❌ Fatal: CLIENT_URL is not a valid URL.');
+    process.exit(1);
+  }
+}
+
+// Core imports
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
+const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const connectDB = require('./config/db');
@@ -16,16 +46,41 @@ const reportRoutes = require('./routes/reportRoutes');
 
 const app = express();
 
-// Connect to MongoDB
-connectDB();
+// Security middlewares
+app.use(helmet());
+app.use(mongoSanitize());
+// Body parsers with size limit
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(cookieParser());
 
-// CORS configuration for cookies and headers
+// Global rate limiter – 100 req / 15 min per IP
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: { success: false, message: 'Too many requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
+
+// Login specific limiter (exported)
+const loginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  message: { success: false, message: 'Too many login attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+module.exports.loginLimiter = loginLimiter;
+
+// CORS configuration – single definition
 const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   process.env.CLIENT_URL,
 ].filter(Boolean);
-
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -38,16 +93,12 @@ app.use(
   })
 );
 
-// Express middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
+// Dev logger
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Health check endpoint
+// Health check
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -64,19 +115,25 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/bills', billRoutes);
 app.use('/api/reports', reportRoutes);
 
-// 404 handler for unknown routes
+// 404 handler
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `API endpoint not found: ${req.method} ${req.originalUrl}`,
-  });
+  res.status(404).json({ success: false, message: `API endpoint not found: ${req.method} ${req.originalUrl}` });
 });
 
-// Centralized error handling middleware
+// Centralized error handling
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+// Graceful shutdown
+const shutdown = () => {
+  console.log('\n[Server] Gracefully shutting down...');
+  process.exit(0);
+};
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
+// Connect to DB and start server (unless in test mode)
+connectDB();
+const PORT = process.env.PORT || 5000;
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`[Server] Restaurant Billing API running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);

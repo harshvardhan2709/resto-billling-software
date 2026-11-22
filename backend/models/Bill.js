@@ -128,6 +128,20 @@ const billSchema = new mongoose.Schema(
       default: 'active',
       index: true,
     },
+    cancellationReason: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    cancelledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
