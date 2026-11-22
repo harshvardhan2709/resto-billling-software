@@ -5,7 +5,44 @@ const Table = require('../models/Table');
 const Payment = require('../models/Payment');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
-// Helper to aggregate bills into real 2-hour shift windows
+// Timezone helper (defaults to Asia/Kolkata for Indian restaurant billing)
+const RESTAURANT_TIMEZONE = process.env.TIMEZONE || process.env.TZ || 'Asia/Kolkata';
+
+// Safe hour extraction in restaurant's local timezone (IST)
+const getRestaurantHour = (date, timeZone = RESTAURANT_TIMEZONE) => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-IN', {
+      timeZone,
+      hour: 'numeric',
+      hour12: false,
+    }).formatToParts(new Date(date));
+    const h = parseInt(parts.find((p) => p.type === 'hour')?.value, 10);
+    return h === 24 ? 0 : h;
+  } catch {
+    return new Date(date).getHours();
+  }
+};
+
+// Safe midnight calculation in restaurant's local timezone
+const getStartOfDayInTimeZone = (date = new Date(), timeZone = RESTAURANT_TIMEZONE) => {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const dateStr = formatter.format(date); // YYYY-MM-DD
+    const tzOffset = timeZone === 'Asia/Kolkata' ? '+05:30' : 'Z';
+    return new Date(`${dateStr}T00:00:00${tzOffset}`);
+  } catch {
+    const fallback = new Date(date);
+    fallback.setHours(0, 0, 0, 0);
+    return fallback;
+  }
+};
+
+// Helper to aggregate bills into real 2-hour shift windows in restaurant's timezone
 const buildHourlyTrend = (bills) => {
   const buckets = [
     { key: '9 AM', label: '09:00 AM', minH: 9, maxH: 11, revenue: 0, orders: 0 },
@@ -16,13 +53,14 @@ const buildHourlyTrend = (bills) => {
     { key: '7 PM', label: '07:00 PM', minH: 19, maxH: 21, revenue: 0, orders: 0 },
     { key: '9 PM', label: '09:00 PM', minH: 21, maxH: 23, revenue: 0, orders: 0 },
     { key: '11 PM', label: '11:00 PM', minH: 23, maxH: 24, revenue: 0, orders: 0 },
+    { key: '12 AM', label: '12:00 AM', minH: 0, maxH: 4, revenue: 0, orders: 0 },
   ];
 
   (bills || []).forEach((b) => {
-    const h = new Date(b.createdAt).getHours();
+    const h = getRestaurantHour(b.createdAt);
     let bucket = buckets.find((bkt) => h >= bkt.minH && h < bkt.maxH);
     if (!bucket) {
-      bucket = h < 9 ? buckets[0] : buckets[buckets.length - 1];
+      bucket = h < 9 ? buckets[buckets.length - 1] : buckets[0];
     }
     bucket.revenue += b.finalAmount || 0;
     bucket.orders += 1;
@@ -41,8 +79,7 @@ const buildHourlyTrend = (bills) => {
 const getDashboardMetrics = async (req, res, next) => {
   try {
     const isCashier = req.user?.role === 'cashier';
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const startOfDay = getStartOfDayInTimeZone();
 
     const [allTodayBills, totalMenuItems, tables, recentOrders] = await Promise.all([
       Bill.find({ createdAt: { $gte: startOfDay }, status: 'active' }),
@@ -149,28 +186,26 @@ const getDetailedAnalytics = async (req, res, next) => {
     let endDate = new Date();
 
     if (range === 'today') {
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(23, 59, 59, 999);
+      startDate = getStartOfDayInTimeZone(now);
+      endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000 - 1);
     } else if (range === 'yesterday') {
-      startDate.setDate(now.getDate() - 1);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setDate(now.getDate() - 1);
-      endDate.setHours(23, 59, 59, 999);
+      const yest = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      startDate = getStartOfDayInTimeZone(yest);
+      endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000 - 1);
     } else if (range === '7days') {
-      startDate.setDate(now.getDate() - 7);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(23, 59, 59, 999);
+      const past7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      startDate = getStartOfDayInTimeZone(past7);
+      endDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     } else if (range === '30days') {
-      startDate.setDate(now.getDate() - 30);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(23, 59, 59, 999);
+      const past30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      startDate = getStartOfDayInTimeZone(past30);
+      endDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     } else if (range === 'custom' && customStart && customEnd) {
-      startDate = new Date(customStart);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(customEnd);
-      endDate.setHours(23, 59, 59, 999);
+      startDate = new Date(`${customStart}T00:00:00+05:30`);
+      endDate = new Date(`${customEnd}T23:59:59+05:30`);
     } else {
-      startDate.setHours(0, 0, 0, 0);
+      startDate = getStartOfDayInTimeZone(now);
+      endDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     }
 
     // Query all bills in range
@@ -300,24 +335,45 @@ const exportSalesReportCSV = async (req, res, next) => {
       'Cancellation Reason',
     ];
 
-    const rows = bills.map((b) => [
-      b.billNumber,
-      new Date(b.createdAt).toISOString().split('T')[0],
-      new Date(b.createdAt).toLocaleTimeString(),
-      b.orderType,
-      b.tableNumber,
-      b.cashier?.name || 'Staff',
-      b.subtotal.toFixed(2),
-      b.discountAmount.toFixed(2),
-      b.taxableAmount.toFixed(2),
-      b.cgst.toFixed(2),
-      b.sgst.toFixed(2),
-      b.roundOff.toFixed(2),
-      b.finalAmount.toFixed(2),
-      b.paymentStatus,
-      b.status,
-      b.cancellationReason ? `"${b.cancellationReason}"` : '',
-    ]);
+    const rows = bills.map((b) => {
+      const createdDate = new Date(b.createdAt);
+      let dateStr, timeStr;
+      try {
+        dateStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: RESTAURANT_TIMEZONE,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(createdDate);
+        timeStr = createdDate.toLocaleTimeString('en-IN', {
+          timeZone: RESTAURANT_TIMEZONE,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
+      } catch {
+        dateStr = createdDate.toISOString().split('T')[0];
+        timeStr = createdDate.toLocaleTimeString();
+      }
+      return [
+        b.billNumber,
+        dateStr,
+        timeStr,
+        b.orderType,
+        b.tableNumber,
+        b.cashier?.name || 'Staff',
+        b.subtotal.toFixed(2),
+        b.discountAmount.toFixed(2),
+        b.taxableAmount.toFixed(2),
+        b.cgst.toFixed(2),
+        b.sgst.toFixed(2),
+        b.roundOff.toFixed(2),
+        b.finalAmount.toFixed(2),
+        b.paymentStatus,
+        b.status,
+        b.cancellationReason ? `"${b.cancellationReason}"` : '',
+      ];
+    });
 
     const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
 

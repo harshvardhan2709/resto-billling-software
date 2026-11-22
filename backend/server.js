@@ -1,4 +1,5 @@
 require('dotenv').config();
+process.env.TZ = process.env.TZ || process.env.TIMEZONE || 'Asia/Kolkata';
 
 // Environment validation
 const requiredEnv = ['JWT_SECRET', 'MONGO_URI'];
