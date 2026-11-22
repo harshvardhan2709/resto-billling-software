@@ -298,7 +298,7 @@ export const BillHistory = () => {
                           >
                             Slip
                           </Button>
-                          {!isCancelled && (
+                          {!isCancelled && isAdmin && (
                             <Button
                               variant="ghost"
                               size="sm"

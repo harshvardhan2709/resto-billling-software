@@ -349,12 +349,10 @@ export const Billing = () => {
                   <span>Subtotal</span>
                   <span className="font-semibold text-slate-800">₹{calculations.subtotal.toFixed(2)}</span>
                 </div>
-                {calculations.discountAmount > 0 && (
-                  <div className="flex justify-between py-1 text-emerald-700 font-medium">
-                    <span>Discount</span>
-                    <span>−₹{calculations.discountAmount.toFixed(2)}</span>
-                  </div>
-                )}
+                <div className={`flex justify-between py-1 ${calculations.discountAmount > 0 ? 'text-emerald-700 font-medium' : 'text-slate-500'}`}>
+                  <span>Discount</span>
+                  <span>{calculations.discountAmount > 0 ? `−₹${calculations.discountAmount.toFixed(2)}` : '₹0.00'}</span>
+                </div>
                 <div className="flex justify-between py-1 border-t border-slate-100 pt-2 text-slate-700 font-medium">
                   <span>Taxable Amount</span>
                   <span>₹{calculations.taxableAmount.toFixed(2)}</span>
@@ -367,19 +365,21 @@ export const Billing = () => {
                   <span>SGST (2.5%)</span>
                   <span>+₹{calculations.sgst.toFixed(2)}</span>
                 </div>
-                {calculations.roundOff !== 0 && (
-                  <div className="flex justify-between py-1 text-slate-400">
-                    <span>Round Off</span>
-                    <span>
-                      {calculations.roundOff >= 0
-                        ? `+₹${calculations.roundOff.toFixed(2)}`
-                        : `−₹${Math.abs(calculations.roundOff).toFixed(2)}`}
-                    </span>
-                  </div>
-                )}
+                <div className="flex justify-between py-1 border-t border-slate-100 text-slate-700 font-medium">
+                  <span>Total before Round-off</span>
+                  <span>₹{calculations.grandTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between py-1 text-slate-500">
+                  <span>Round-off Adjustment</span>
+                  <span>
+                    {calculations.roundOff >= 0
+                      ? `+₹${calculations.roundOff.toFixed(2)}`
+                      : `−₹${Math.abs(calculations.roundOff).toFixed(2)}`}
+                  </span>
+                </div>
                 <div className="pt-3 border-t-2 border-slate-200 flex justify-between items-center">
-                  <span className="text-sm font-bold text-slate-900">Total</span>
-                  <span className="text-xl font-bold text-emerald-700">₹{calculations.finalAmount}</span>
+                  <span className="text-sm font-bold text-slate-900">Final Payable Amount</span>
+                  <span className="text-xl font-bold text-emerald-700">₹{calculations.finalAmount.toFixed(2)}</span>
                 </div>
               </div>
             </Card>

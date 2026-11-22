@@ -116,18 +116,12 @@ export const ReceiptModal = ({ isOpen, onClose, bill, paymentInfo }) => {
               <span>₹{bill.subtotal?.toFixed(2)}</span>
             </div>
 
-            {bill.discountAmount > 0 && (
-              <div className="flex justify-between text-emerald-700 font-semibold">
-                <span>
-                  Discount (
-                  {bill.discountType === 'percentage'
-                    ? `${bill.discountValue}%`
-                    : 'Fixed'}
-                  ):
-                </span>
-                <span>-₹{bill.discountAmount?.toFixed(2)}</span>
-              </div>
-            )}
+            <div className={`flex justify-between ${bill.discountAmount > 0 ? 'text-emerald-700 font-semibold' : 'text-slate-500'}`}>
+              <span>
+                Discount{bill.discountAmount > 0 && bill.discountType === 'percentage' ? ` (${bill.discountValue}%)` : ''}:
+              </span>
+              <span>{bill.discountAmount > 0 ? `-₹${bill.discountAmount?.toFixed(2)}` : '₹0.00'}</span>
+            </div>
 
             <div className="flex justify-between">
               <span className="text-slate-500">Taxable Amount:</span>
@@ -144,20 +138,23 @@ export const ReceiptModal = ({ isOpen, onClose, bill, paymentInfo }) => {
               <span>₹{bill.sgst?.toFixed(2)}</span>
             </div>
 
-            {bill.roundOff !== 0 && (
-              <div className="flex justify-between text-slate-400 text-[10px]">
-                <span>Round Off:</span>
-                <span>
-                  {bill.roundOff > 0 ? `+₹${bill.roundOff}` : `-₹${Math.abs(bill.roundOff)}`}
-                </span>
-              </div>
-            )}
+            <div className="flex justify-between text-slate-700 font-semibold pt-1 border-t border-slate-200">
+              <span>Grand Total before Round-off:</span>
+              <span>₹{bill.grandTotal?.toFixed(2)}</span>
+            </div>
+
+            <div className="flex justify-between text-slate-500 text-[10px]">
+              <span>Round-off Adjustment:</span>
+              <span>
+                {bill.roundOff >= 0 ? `+₹${bill.roundOff?.toFixed(2)}` : `-₹${Math.abs(bill.roundOff)?.toFixed(2)}`}
+              </span>
+            </div>
           </div>
 
           {/* Grand Total */}
           <div className="py-2.5 border-b border-dashed border-slate-300">
             <div className="flex justify-between items-center text-sm font-extrabold text-slate-900 font-sans">
-              <span>FINAL AMOUNT:</span>
+              <span>FINAL PAYABLE:</span>
               <span className="text-base font-mono">₹{bill.finalAmount?.toFixed(2)}</span>
             </div>
           </div>

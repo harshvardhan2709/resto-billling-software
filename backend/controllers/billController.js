@@ -1,4 +1,5 @@
 const { getNextSequence } = require('../utils/counter');
+const Bill = require('../models/Bill');
 const Order = require('../models/Order');
 const Table = require('../models/Table');
 const Payment = require('../models/Payment');
@@ -248,6 +249,12 @@ const recordPayment = async (req, res, next) => {
       }
     }
 
+    if (tenderedAmount !== undefined && tenderedAmount !== null && paymentMode === 'cash') {
+      if (Number(tenderedAmount) < Number(amount)) {
+        return errorResponse(res, 400, `Cash received (₹${tenderedAmount}) cannot be less than payment amount (₹${amount})`);
+      }
+    }
+
     // Compute prospective total after adding new payments
     const existingPayments = await Payment.find({ bill: bill._id });
     const existingTotal = existingPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -320,6 +327,21 @@ const cancelBill = async (req, res, next) => {
     bill.cancelledAt = new Date();
 
     await bill.save();
+
+    // Consistently update associated order & table state
+    if (bill.order) {
+      const order = await Order.findById(bill.order);
+      if (order && order.status !== 'cancelled') {
+        order.status = 'cancelled';
+        await order.save();
+        if (order.table) {
+          await Table.findByIdAndUpdate(order.table, {
+            status: 'free',
+            currentOrder: null,
+          });
+        }
+      }
+    }
 
     const populatedBill = await Bill.findById(bill._id)
       .populate('cashier', 'name username')
