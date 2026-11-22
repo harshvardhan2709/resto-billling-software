@@ -158,9 +158,11 @@ export const Tables = () => {
   };
 
   const handleOpenRunningTable = (table) => {
-    const activeOrder = orders.find(
-      (o) => o.table?._id === table._id || o.table === table._id
-    );
+    const activeOrder =
+      table.currentOrder ||
+      orders.find(
+        (o) => (o.table?._id || o.table)?.toString() === table._id?.toString()
+      );
     if (activeOrder) {
       setViewingOrder(activeOrder);
       setIsAddingItemsToActive(false);
@@ -303,9 +305,11 @@ export const Tables = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {tables.map((table) => {
             const isFree = table.status === 'free';
-            const activeOrder = orders.find(
-              (o) => o.table?._id === table._id || o.table === table._id
-            );
+            const activeOrder =
+              table.currentOrder ||
+              orders.find(
+                (o) => (o.table?._id || o.table)?.toString() === table._id?.toString()
+              );
 
             return (
               <div

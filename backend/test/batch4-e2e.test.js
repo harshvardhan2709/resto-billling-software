@@ -77,7 +77,49 @@ const runBatch4Tests = async () => {
 
   server = app.listen(PORT);
 
+  // Wait for database connection before starting assertions
+  if (mongoose.connection.readyState !== 1) {
+    await new Promise((resolve) => {
+      mongoose.connection.once('open', resolve);
+      setTimeout(resolve, 3000);
+    });
+  }
+
   try {
+    // -------------------------------------------------------------------
+    // 0. HEALTH CHECK ENDPOINT
+    // -------------------------------------------------------------------
+    console.log('\n--- 0. Testing Health Check Endpoint (/health) ---');
+
+    const healthRes = await request({ method: 'GET', path: '/health' });
+    assert(healthRes.statusCode === 200, 'GET /health returns HTTP 200 when MongoDB is connected');
+    assert(healthRes.body.success === true, 'GET /health returns success: true');
+    assert(healthRes.body.database === 'connected', 'GET /health returns database: "connected"');
+    assert(healthRes.body.message === 'Server is healthy', 'GET /health returns message: "Server is healthy"');
+
+    // Security check: ensure no secrets/URIs leaked
+    const bodyStr = JSON.stringify(healthRes.body);
+    assert(
+      !bodyStr.includes(process.env.MONGO_URI) &&
+      !bodyStr.includes(process.env.JWT_SECRET) &&
+      !bodyStr.includes('password') &&
+      !bodyStr.includes('mongodb://'),
+      'GET /health does not expose database URIs, credentials, or secrets'
+    );
+
+    // Backward compatibility check for /api/health
+    const apiHealthRes = await request({ method: 'GET', path: '/api/health' });
+    assert(apiHealthRes.statusCode === 200 && apiHealthRes.body.success === true, 'GET /api/health also returns HTTP 200');
+
+    // Test 503 behavior when database is disconnected
+    const originalReadyState = mongoose.connection.readyState;
+    Object.defineProperty(mongoose.connection, 'readyState', { value: 0, configurable: true });
+    const disconnectedRes = await request({ method: 'GET', path: '/health' });
+    assert(disconnectedRes.statusCode === 503, 'GET /health returns HTTP 503 when database is disconnected');
+    assert(disconnectedRes.body.success === false, 'GET /health returns success: false when disconnected');
+    assert(disconnectedRes.body.database === 'disconnected', 'GET /health returns database: "disconnected"');
+    Object.defineProperty(mongoose.connection, 'readyState', { value: originalReadyState, configurable: true });
+
     // -------------------------------------------------------------------
     // 1. AUTHENTICATION & TOKENS
     // -------------------------------------------------------------------

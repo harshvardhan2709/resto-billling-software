@@ -27,6 +27,7 @@ if (process.env.CLIENT_URL) {
 
 // Core imports
 const express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
@@ -54,11 +55,11 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
-// Global rate limiter – 100 req / 15 min per IP
+// Global rate limiter – 2000 req / 15 min per IP in dev/test, 500 in prod
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: process.env.NODE_ENV === 'production' ? 500 : 2000,
     message: { success: false, message: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -68,7 +69,7 @@ app.use(
 // Login specific limiter (exported)
 const loginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 5,
+  max: process.env.NODE_ENV === 'production' ? 20 : 500,
   message: { success: false, message: 'Too many login attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -98,14 +99,27 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    service: 'Urban Plate Restaurant Billing & POS API',
+// Health check endpoint
+const checkHealth = (req, res) => {
+  const isDbConnected = mongoose.connection.readyState === 1;
+
+  if (isDbConnected) {
+    return res.status(200).json({
+      success: true,
+      message: 'Server is healthy',
+      database: 'connected',
+    });
+  }
+
+  return res.status(503).json({
+    success: false,
+    message: 'Database connection unavailable',
+    database: 'disconnected',
   });
-});
+};
+
+app.get('/health', checkHealth);
+app.get('/api/health', checkHealth);
 
 // Mount API routes
 app.use('/api/auth', authRoutes);

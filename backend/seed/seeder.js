@@ -1,5 +1,12 @@
 require('dotenv').config({ path: __dirname + '/../.env' });
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+if (process.env.MONGO_URI && process.env.MONGO_URI.startsWith('mongodb+srv://')) {
+  try {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  } catch {}
+}
 const User = require('../models/User');
 const MenuItem = require('../models/MenuItem');
 const Table = require('../models/Table');

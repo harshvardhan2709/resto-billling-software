@@ -57,7 +57,7 @@ export const ReceiptModal = ({ isOpen, onClose, bill, paymentInfo }) => {
             </h2>
             <p className="text-[11px] text-slate-500">Fine Dining & Multi-Cuisine POS</p>
             <p className="text-[10px] text-slate-400 mt-1">
-              FSSAI Lic: 11521018000452 | GSTIN: 27AABCU9603R1ZM
+              FSSAI (Demo): 00000000000000 | GSTIN (Demo): 29AAAAA0000A1Z5
             </p>
             <p className="text-[10px] text-slate-400">
               MG Road, Metro Pillar 42, Bangalore, KA - 560001
@@ -205,8 +205,8 @@ export const ReceiptModal = ({ isOpen, onClose, bill, paymentInfo }) => {
               Thank you for dining at Urban Plate!
             </p>
             <p>Please visit again. Have a wonderful day!</p>
-            <p className="text-[9px] text-slate-300 pt-1">
-              *** System Generated Commercial POS Invoice ***
+            <p className="text-[9px] text-slate-400 pt-1 font-mono">
+              *** Demo POS Receipt (Sample / Local Evaluation Only) ***
             </p>
           </div>
         </div>
