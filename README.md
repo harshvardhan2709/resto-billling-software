@@ -1,4 +1,4 @@
-# Urban Plate — Commercial Restaurant Billing & POS System
+# Urban Plate — Commercial Restaurant Billing & POS System - [LIVE](https://restaurant-billing-self.vercel.app)
 
 A high-performance, commercial-grade Restaurant Billing and Point of Sale (POS) software built for **Urban Plate Restaurant**. Designed for rapid counter checkout, live dining floor management, multi-mode payment settlement, and automated Indian GST compliance.
 
