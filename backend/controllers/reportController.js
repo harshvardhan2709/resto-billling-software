@@ -8,46 +8,98 @@ const { successResponse, errorResponse } = require('../utils/apiResponse');
 // GET /api/reports/dashboard (Real-time operational summary)
 const getDashboardMetrics = async (req, res, next) => {
   try {
+    const isCashier = req.user?.role === 'cashier';
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    const [todayBills, totalMenuItems, tables, recentOrders] = await Promise.all([
+    const [allTodayBills, totalMenuItems, tables, recentOrders] = await Promise.all([
       Bill.find({ createdAt: { $gte: startOfDay }, status: 'active' }),
       MenuItem.find({}),
       Table.find({}).sort({ tableNumber: 1 }).populate('currentOrder'),
-      Order.find({ status: 'open' }).populate('table').sort({ createdAt: -1 }).limit(5),
+      Order.find({ status: 'open' }).populate('table').sort({ createdAt: -1 }).limit(8),
     ]);
 
-    const todaySales = todayBills.reduce((acc, b) => acc + (b.finalAmount || 0), 0);
-    const todayOrdersCount = todayBills.length;
+    // Today's Sales: Full for Admin, Limited (shift sales) for Cashier
+    const totalRestaurantSales = allTodayBills.reduce((acc, b) => acc + (b.finalAmount || 0), 0);
+    const cashierBills = allTodayBills.filter(
+      (b) => b.cashier?.toString() === req.user?._id?.toString()
+    );
+    const cashierShiftSales = cashierBills.reduce((acc, b) => acc + (b.finalAmount || 0), 0);
+
+    const todaySales = isCashier ? cashierShiftSales : totalRestaurantSales;
+    const todayOrdersCount = allTodayBills.length; // Total bills: visible to both
 
     const freeTablesCount = tables.filter((t) => t.status === 'free').length;
     const runningTablesCount = tables.filter((t) => t.status === 'running').length;
 
-    // Category distribution
+    // Total revenue analytics / Hourly buckets (Admin only)
+    let hourlyData = [];
+    if (!isCashier) {
+      const hours = ['11 AM', '1 PM', '3 PM', '5 PM', '7 PM', '9 PM', '11 PM'];
+      hourlyData = hours.map((hour, idx) => {
+        const baseSales =
+          totalRestaurantSales > 0
+            ? Math.round(totalRestaurantSales * (0.1 + idx * 0.05))
+            : (idx + 1) * 350;
+        const baseOrders =
+          todayOrdersCount > 0 ? Math.max(1, Math.round(todayOrdersCount * 0.15)) : idx + 1;
+        return {
+          time: hour,
+          sales: baseSales,
+          orders: baseOrders,
+        };
+      });
+    }
+
+    // Payment analytics (Admin only)
+    let paymentDistribution = [];
+    if (!isCashier) {
+      const billIds = allTodayBills.map((b) => b._id);
+      const payments = await Payment.find({ bill: { $in: billIds } });
+      const paymentModes = { cash: 0, upi: 0, card: 0 };
+      payments.forEach((p) => {
+        if (paymentModes[p.paymentMode] !== undefined) {
+          paymentModes[p.paymentMode] += p.amount;
+        }
+      });
+      paymentDistribution = [
+        { mode: 'Cash', amount: paymentModes.cash },
+        { mode: 'UPI / QR', amount: paymentModes.upi },
+        { mode: 'Card', amount: paymentModes.card },
+      ];
+    }
+
+    // Top-selling items (Admin only)
+    let topSellingItems = [];
+    if (!isCashier) {
+      const itemSalesMap = {};
+      allTodayBills.forEach((b) => {
+        b.items?.forEach((item) => {
+          const name = item.name;
+          if (!itemSalesMap[name]) {
+            itemSalesMap[name] = { name, quantity: 0, revenue: 0 };
+          }
+          itemSalesMap[name].quantity += item.quantity;
+          itemSalesMap[name].revenue += item.total || item.quantity * item.price;
+        });
+      });
+      topSellingItems = Object.values(itemSalesMap)
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 5);
+    }
+
+    // Category distribution for menu
     const categoryCounts = {};
     totalMenuItems.forEach((item) => {
       categoryCounts[item.category] = (categoryCounts[item.category] || 0) + 1;
     });
-
     const categoryDistribution = Object.keys(categoryCounts).map((cat) => ({
       name: cat,
       count: categoryCounts[cat],
     }));
 
-    // Hourly buckets (11 AM to 11 PM)
-    const hours = ['11 AM', '1 PM', '3 PM', '5 PM', '7 PM', '9 PM', '11 PM'];
-    const hourlyData = hours.map((hour, idx) => {
-      const baseSales = todaySales > 0 ? Math.round(todaySales * (0.1 + (idx * 0.05))) : (idx + 1) * 350;
-      const baseOrders = todayOrdersCount > 0 ? Math.max(1, Math.round(todayOrdersCount * 0.15)) : idx + 1;
-      return {
-        time: hour,
-        sales: baseSales,
-        orders: baseOrders,
-      };
-    });
-
     return successResponse(res, 200, 'Dashboard metrics fetched successfully', {
+      salesScope: isCashier ? 'limited' : 'full',
       todaySales,
       todayOrdersCount,
       activeMenuCount: totalMenuItems.filter((m) => m.isAvailable).length,
@@ -57,8 +109,10 @@ const getDashboardMetrics = async (req, res, next) => {
         free: freeTablesCount,
         running: runningTablesCount,
       },
-      categoryDistribution,
+      categoryDistribution: !isCashier ? categoryDistribution : [],
       hourlyData,
+      paymentDistribution,
+      topSellingItems,
       recentOpenOrders: recentOrders,
     });
   } catch (error) {

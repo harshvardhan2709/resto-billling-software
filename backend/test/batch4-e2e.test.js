@@ -162,10 +162,11 @@ const runBatch4Tests = async () => {
     });
     assert(cashierCreateMenu.statusCode === 403, 'Cashier blocked from POST /api/menu (403)');
 
-    // Cashier blocked from reports
+    // Cashier allowed on dashboard metrics for live shift updates
     const cashierDash = await request({ method: 'GET', path: '/api/reports/dashboard', headers: { Authorization: `Bearer ${cashierToken}` } });
-    assert(cashierDash.statusCode === 403, 'Cashier blocked from GET /api/reports/dashboard (403)');
+    assert(cashierDash.statusCode === 200 && cashierDash.body.data.todaySales !== undefined, 'Cashier allowed on GET /api/reports/dashboard (200)');
 
+    // Cashier blocked from detailed analytics and audit exports
     const cashierAnalytics = await request({ method: 'GET', path: '/api/reports/analytics?range=today', headers: { Authorization: `Bearer ${cashierToken}` } });
     assert(cashierAnalytics.statusCode === 403, 'Cashier blocked from GET /api/reports/analytics (403)');
 

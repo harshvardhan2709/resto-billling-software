@@ -8,8 +8,10 @@ const {
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
 
-// All reporting endpoints are restricted to Admin
-router.get('/dashboard', protect, authorize('admin'), getDashboardMetrics);
+// Dashboard metrics available to both Admin and Cashier for shift tracking
+router.get('/dashboard', protect, authorize('admin', 'cashier'), getDashboardMetrics);
+
+// Detailed financial analytics and audit CSV exports remain restricted to Admin
 router.get('/analytics', protect, authorize('admin'), getDetailedAnalytics);
 router.get('/export-csv', protect, authorize('admin'), exportSalesReportCSV);
 
