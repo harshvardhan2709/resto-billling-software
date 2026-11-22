@@ -5,6 +5,38 @@ const Table = require('../models/Table');
 const Payment = require('../models/Payment');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
+// Helper to aggregate bills into real 2-hour shift windows
+const buildHourlyTrend = (bills) => {
+  const buckets = [
+    { key: '9 AM', label: '09:00 AM', minH: 9, maxH: 11, revenue: 0, orders: 0 },
+    { key: '11 AM', label: '11:00 AM', minH: 11, maxH: 13, revenue: 0, orders: 0 },
+    { key: '1 PM', label: '01:00 PM', minH: 13, maxH: 15, revenue: 0, orders: 0 },
+    { key: '3 PM', label: '03:00 PM', minH: 15, maxH: 17, revenue: 0, orders: 0 },
+    { key: '5 PM', label: '05:00 PM', minH: 17, maxH: 19, revenue: 0, orders: 0 },
+    { key: '7 PM', label: '07:00 PM', minH: 19, maxH: 21, revenue: 0, orders: 0 },
+    { key: '9 PM', label: '09:00 PM', minH: 21, maxH: 23, revenue: 0, orders: 0 },
+    { key: '11 PM', label: '11:00 PM', minH: 23, maxH: 24, revenue: 0, orders: 0 },
+  ];
+
+  (bills || []).forEach((b) => {
+    const h = new Date(b.createdAt).getHours();
+    let bucket = buckets.find((bkt) => h >= bkt.minH && h < bkt.maxH);
+    if (!bucket) {
+      bucket = h < 9 ? buckets[0] : buckets[buckets.length - 1];
+    }
+    bucket.revenue += b.finalAmount || 0;
+    bucket.orders += 1;
+  });
+
+  return buckets.map((b) => ({
+    time: b.key,
+    name: b.label,
+    sales: b.revenue,
+    revenue: b.revenue,
+    orders: b.orders,
+  }));
+};
+
 // GET /api/reports/dashboard (Real-time operational summary)
 const getDashboardMetrics = async (req, res, next) => {
   try {
@@ -32,23 +64,10 @@ const getDashboardMetrics = async (req, res, next) => {
     const freeTablesCount = tables.filter((t) => t.status === 'free').length;
     const runningTablesCount = tables.filter((t) => t.status === 'running').length;
 
-    // Total revenue analytics / Hourly buckets (Admin only)
+    // Total revenue analytics / Hourly buckets (Admin only, computed from real today's bills)
     let hourlyData = [];
     if (!isCashier) {
-      const hours = ['11 AM', '1 PM', '3 PM', '5 PM', '7 PM', '9 PM', '11 PM'];
-      hourlyData = hours.map((hour, idx) => {
-        const baseSales =
-          totalRestaurantSales > 0
-            ? Math.round(totalRestaurantSales * (0.1 + idx * 0.05))
-            : (idx + 1) * 350;
-        const baseOrders =
-          todayOrdersCount > 0 ? Math.max(1, Math.round(todayOrdersCount * 0.15)) : idx + 1;
-        return {
-          time: hour,
-          sales: baseSales,
-          orders: baseOrders,
-        };
-      });
+      hourlyData = buildHourlyTrend(allTodayBills);
     }
 
     // Payment analytics (Admin only)
@@ -227,15 +246,8 @@ const getDetailedAnalytics = async (req, res, next) => {
       { mode: 'Card', amount: paymentModes.card },
     ];
 
-    // Timeline series data for chart
-    const timelineData = [
-      { name: '11:00 AM', revenue: Math.round(netRevenue * 0.1) || 250, orders: Math.max(1, Math.round(totalBillsCount * 0.1)) },
-      { name: '01:00 PM', revenue: Math.round(netRevenue * 0.25) || 680, orders: Math.max(1, Math.round(totalBillsCount * 0.25)) },
-      { name: '03:00 PM', revenue: Math.round(netRevenue * 0.12) || 340, orders: Math.max(1, Math.round(totalBillsCount * 0.12)) },
-      { name: '05:00 PM', revenue: Math.round(netRevenue * 0.15) || 450, orders: Math.max(1, Math.round(totalBillsCount * 0.15)) },
-      { name: '07:00 PM', revenue: Math.round(netRevenue * 0.22) || 720, orders: Math.max(1, Math.round(totalBillsCount * 0.22)) },
-      { name: '09:00 PM', revenue: Math.round(netRevenue * 0.16) || 510, orders: Math.max(1, Math.round(totalBillsCount * 0.16)) },
-    ];
+    // Timeline series data for chart (computed from real active bills)
+    const timelineData = buildHourlyTrend(activeBills);
 
     return successResponse(res, 200, 'Detailed analytics fetched successfully', {
       period: { range, startDate, endDate },

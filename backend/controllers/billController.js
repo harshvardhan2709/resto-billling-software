@@ -98,7 +98,27 @@ const getBills = async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
-    return successResponse(res, 200, 'Bills retrieved successfully', bills, {
+    // Attach payments and payment modes to each bill
+    const billIds = bills.map((b) => b._id);
+    const payments = await Payment.find({ bill: { $in: billIds } });
+    const paymentsByBill = {};
+    payments.forEach((p) => {
+      const bId = p.bill.toString();
+      if (!paymentsByBill[bId]) paymentsByBill[bId] = [];
+      paymentsByBill[bId].push(p);
+    });
+
+    const billsWithPayments = bills.map((b) => {
+      const billObj = b.toObject();
+      const bPayments = paymentsByBill[b._id.toString()] || [];
+      billObj.payments = bPayments;
+      const modes = [...new Set(bPayments.map((p) => p.paymentMode).filter(Boolean))];
+      billObj.paymentMode = modes.length > 1 ? 'split' : modes[0] || 'cash';
+      billObj.paymentModes = modes;
+      return billObj;
+    });
+
+    return successResponse(res, 200, 'Bills retrieved successfully', billsWithPayments, {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
