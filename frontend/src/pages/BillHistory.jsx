@@ -58,20 +58,33 @@ export const BillHistory = () => {
       if (statusFilter !== 'All') params.status = statusFilter;
       if (orderTypeFilter !== 'All') params.orderType = orderTypeFilter;
 
+      if (datePreset !== 'All') {
+        params.datePreset = datePreset;
+      }
+
+      const formatLocalDate = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
       const now = new Date();
       if (datePreset === 'today') {
-        params.startDate = now.toISOString().split('T')[0];
-        params.endDate = now.toISOString().split('T')[0];
+        const todayStr = formatLocalDate(now);
+        params.startDate = todayStr;
+        params.endDate = todayStr;
       } else if (datePreset === 'yesterday') {
         const yest = new Date(now);
         yest.setDate(now.getDate() - 1);
-        params.startDate = yest.toISOString().split('T')[0];
-        params.endDate = yest.toISOString().split('T')[0];
+        const yestStr = formatLocalDate(yest);
+        params.startDate = yestStr;
+        params.endDate = yestStr;
       } else if (datePreset === 'week') {
         const weekAgo = new Date(now);
         weekAgo.setDate(now.getDate() - 7);
-        params.startDate = weekAgo.toISOString().split('T')[0];
-        params.endDate = now.toISOString().split('T')[0];
+        params.startDate = formatLocalDate(weekAgo);
+        params.endDate = formatLocalDate(now);
       }
 
       const res = await api.get('/bills', { params });

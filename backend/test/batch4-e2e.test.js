@@ -576,6 +576,27 @@ const runBatch4Tests = async () => {
     });
     assert(filterCancelledRes.statusCode === 200 && filterCancelledRes.body.data.every((b) => b.status === 'cancelled'), 'Filter by status=cancelled works correctly');
 
+    const filterTodayRes = await request({
+      method: 'GET',
+      path: '/api/bills?datePreset=today',
+      headers: { Authorization: `Bearer ${cashierToken}` },
+    });
+    assert(filterTodayRes.statusCode === 200 && Array.isArray(filterTodayRes.body.data) && filterTodayRes.body.data.length > 0, 'Filter by datePreset=today returns today\'s bills');
+
+    const filterWeekRes = await request({
+      method: 'GET',
+      path: '/api/bills?datePreset=week',
+      headers: { Authorization: `Bearer ${cashierToken}` },
+    });
+    assert(filterWeekRes.statusCode === 200 && Array.isArray(filterWeekRes.body.data) && filterWeekRes.body.data.length >= filterTodayRes.body.data.length, 'Filter by datePreset=week returns bills covering the week');
+
+    const filterYesterdayRes = await request({
+      method: 'GET',
+      path: '/api/bills?datePreset=yesterday',
+      headers: { Authorization: `Bearer ${cashierToken}` },
+    });
+    assert(filterYesterdayRes.statusCode === 200 && Array.isArray(filterYesterdayRes.body.data), 'Filter by datePreset=yesterday returns valid response');
+
     // -------------------------------------------------------------------
     // 11. REPORTS, ANALYTICS & CSV EXPORT AUDIT
     // -------------------------------------------------------------------

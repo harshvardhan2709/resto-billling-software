@@ -5,6 +5,27 @@ const Table = require('../models/Table');
 const Payment = require('../models/Payment');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
+// Timezone helper (defaults to Asia/Kolkata for Indian restaurant billing)
+const RESTAURANT_TIMEZONE = process.env.TIMEZONE || process.env.TZ || 'Asia/Kolkata';
+
+const getStartOfDayInTimeZone = (date = new Date(), timeZone = RESTAURANT_TIMEZONE) => {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const dateStr = formatter.format(date);
+    const tzOffset = timeZone === 'Asia/Kolkata' ? '+05:30' : 'Z';
+    return new Date(`${dateStr}T00:00:00${tzOffset}`);
+  } catch {
+    const fallback = new Date(date);
+    fallback.setHours(0, 0, 0, 0);
+    return fallback;
+  }
+};
+
 // Helper to compute tax and totals
 /* Compute financial values using integer paise to avoid floating‑point errors */
 const computeBillFinancials = (subtotal, discountType = 'fixed', discountValue = 0) => {
@@ -59,6 +80,8 @@ const getBills = async (req, res, next) => {
       search,
       startDate,
       endDate,
+      datePreset,
+      range,
     } = req.query;
 
     const query = {};
@@ -66,17 +89,34 @@ const getBills = async (req, res, next) => {
     if (paymentStatus && paymentStatus !== 'All') query.paymentStatus = paymentStatus;
     if (orderType && orderType !== 'All') query.orderType = orderType;
 
-    // Date range filtering
-    if (startDate || endDate) {
+    // Date filtering (supports presets: 'today', 'yesterday', 'week'/'7days' OR custom startDate/endDate)
+    const effectivePreset = datePreset || range;
+    if (effectivePreset === 'today') {
+      const start = getStartOfDayInTimeZone();
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+      query.createdAt = { $gte: start, $lte: end };
+    } else if (effectivePreset === 'yesterday') {
+      const yest = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const start = getStartOfDayInTimeZone(yest);
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+      query.createdAt = { $gte: start, $lte: end };
+    } else if (effectivePreset === 'week' || effectivePreset === '7days') {
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const start = getStartOfDayInTimeZone(weekAgo);
+      const end = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      query.createdAt = { $gte: start, $lte: end };
+    } else if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
+        const start = startDate.includes('T')
+          ? new Date(startDate)
+          : new Date(`${startDate}T00:00:00+05:30`);
         query.createdAt.$gte = start;
       }
       if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
+        const end = endDate.includes('T')
+          ? new Date(endDate)
+          : new Date(`${endDate}T23:59:59.999+05:30`);
         query.createdAt.$lte = end;
       }
     }
